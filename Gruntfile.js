@@ -27,11 +27,11 @@ module.exports = function(grunt) {
         crx: {
             myPublicExtension: {
                 src: "buildSrc/**/*",
-                dest: "crx/clearRead.zip",
+                dest: "crx/随机单词.zip",
             },
             mySignedExtension: {
                 src: "buildSrc/**/*",
-                dest: "crx/clearRead.crx",
+                dest: "crx/随机单词.crx",
                 options: {
                     privateKey: "buildSrc/key.pem"
                 }

@@ -1,0 +1,15 @@
+.translated-word {
+    background-color: #ffff00;
+    cursor: pointer;
+}
+
+.english-learning-notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background-color: #333;
+    color: #fff;
+    padding: 10px;
+    border-radius: 5px;
+    z-index: 9999;
+}

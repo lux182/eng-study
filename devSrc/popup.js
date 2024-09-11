@@ -1,149 +1,147 @@
-let hotkeys = [];
-let editType = '';
-let sysState = 'open';
-import keycode from 'keycode';
-const addEvents = () => {
-    document.getElementById('editOpen').addEventListener('click', (e) => {
-        editType = 'open';
-        openDialog();
-    });
-    document.getElementById('editClose').addEventListener('click', (e) => {
-        editType = 'close';
-        openDialog();
-    });
-    document.getElementById('dialogCancel').addEventListener('click', (e) => {
-        closeDialog();
-    });
-    document.getElementById('dialogConfirm').addEventListener('click', (e) => {
-        if(hotkeys.length > 0) {
-            saveHotKey();
-        }
-        closeDialog();
-    });
-    document.getElementById('hotkey').addEventListener('keydown', (e) => {
-        let code = e.keyCode;
-        if(hotkeys.indexOf(code) == -1) {
-            hotkeys.push(code);
-        }
-        e.preventDefault();
-    });
-    document.getElementById('hotkey').addEventListener('keyup', (e) => {
-        keyToName();
-        document.getElementById('hotkey').blur();
-        let classNames = document.getElementById('hotkeyWrap').className;
-        document.getElementById('hotkeyWrap').setAttribute('class', `${classNames} is-dirty`);
-        e.preventDefault();
-    });
-    document.getElementById('hotkey').addEventListener('focus', (e) => {
-        hotkeys = [];
-    });
-    document.getElementById('isOpen').addEventListener('change', (e) => {
-        let state = e.target.checked?'open':'close';
-        chrome.storage.sync.set({state: state}, () => {
-            switchState();
-            snackbar(`ClearRead ${e.target.checked?'enable':'disable'} success!`);
-        });
-    });
-};
-const keyToName = () => {
-    let keyNames = ``;
-    hotkeys.map((data, k) => {
-        keyNames += `${keycode.names[data]}${k < (hotkeys.length - 1)?' + ':''}`;
-    });
-    document.getElementById('hotkey').value = keyNames;
-};
+let storage = null;
 
-const keyToLabel = (keys) => {
-    let keyNames = ``;
-    keys.map((data, k) => {
-        keyNames += `${keycode.names[data]}${k < (keys.length - 1)?'+':''}`;
-    });
-    return keyNames;
-};
+function initStorageWhenReady() {
+    console.log(chrome);
+    if (chrome && chrome.storage && chrome.storage.local) {
+        initStorage();
+    }
+}
 
-const saveHotKey = () => {
-    let obj = {};
-    obj[editType] = hotkeys;
-    chrome.storage.sync.set(obj, () => {
-        initSetLabel();
-        snackbar('The hotkey was successfully modified!');
-    });
-};
-
-const snackbar = (msg) => {
-    let snackbarContainer = document.querySelector('#toast');
-    let data = {message: msg};
-    snackbarContainer.MaterialSnackbar.showSnackbar(data);
-};
-
-const openDialog = () => {
-    if(sysState == 'close') return;
-    hotkeys = [];
-    chrome.storage.sync.get(editType, (data) => {
-        if(data.hasOwnProperty(editType)) {
-            hotkeys = data[editType];
-        }
-        keyToName();
-        document.getElementsByClassName('hot-key-dialog')[0].style.display = 'flex';
-        document.getElementById('hotkey').focus();
-    });
-};
-const closeDialog = () => {
-    document.getElementsByClassName('hot-key-dialog')[0].style.display = 'none';
-};
-const initSetLabel = () => {
-    chrome.storage.sync.get('open', (data) => {
-        if(data.hasOwnProperty('open')) {
-            let label = keyToLabel(data.open);
-            document.getElementById('openLabel').innerText = label;
-        }else {
-            document.getElementById('openLabel').innerText = `shift+enter`;
-        }
-    });
-    chrome.storage.sync.get('close', (data) => {
-        if(data.hasOwnProperty('close')) {
-            let label = keyToLabel(data.close);
-            document.getElementById('closeLabel').innerText = label;
-        }else {
-            document.getElementById('closeLabel').innerText = `esc`;
-        }
-    });
-};
-const switchState = (init) => {
-    chrome.storage.sync.get('state', (data) => {
-        if(data.hasOwnProperty('state')) {
-            sysState = data.state;
-        }else {
-            sysState = 'open';
-        }
-        let wrap = document.getElementsByClassName('popup-wrap')[0];
-        if(sysState == 'open') {
-            chrome.browserAction.setIcon({
-                path: 'icon.png'
-            }, () => {});
-            wrap.setAttribute('class', `popup-wrap`);
-        }else {
-            chrome.browserAction.setIcon({
-                path: 'icon_gray.png'
-            }, () => {});
-            wrap.setAttribute('class', `popup-wrap popup-disable`);
-        }
-        if(init) {
-            let switchEl = document.getElementsByClassName('mdl-switch')[0];
-            let classNames = switchEl.className;
-            if(sysState == 'open') {
-                if(classNames.indexOf('is-checked') == -1) {
-                    switchEl.setAttribute('class', `${classNames} is-checked`);
-                }
-            }else {
-                if(classNames.indexOf('is-checked') > -1) {
-                    switchEl.setAttribute('class', `${classNames.replace('is-checked', '')}`);
-                }
+function initStorage() {
+    console.log('initStorage');
+    if (chrome && chrome.storage && chrome.storage.local) {
+        storage = chrome.storage.local;
+    } else {
+        console.error('Chrome storage is not available');
+        // 使用 localStorage 作为备用
+        storage = {
+            get: (key, callback) => {
+                const value = localStorage.getItem(key);
+                callback(value ? JSON.parse(value) : {});
+            },
+            set: (obj, callback) => {
+                Object.keys(obj).forEach(key => {
+                    localStorage.setItem(key, JSON.stringify(obj[key]));
+                });
+                if (callback) callback();
             }
-            document.getElementById('isOpen').checked = (sysState == 'open')?true:false;
+        };
+    }
+    // 初始化存储后立即显示词汇表和随机单词
+    showVocabulary();
+    showRandomWord();
+}
+
+function showVocabulary() {
+    console.log('showVocabulary function called'); // 调试信息
+    if (!storage) {
+        console.error('Storage is not initialized');
+        return;
+    }
+    storage.get('vocabulary', function (result) {
+        console.log('Retrieved vocabulary:', result.vocabulary); // 调试信息
+        let vocabulary = result.vocabulary || [];
+        let vocabularyList = document.getElementById('vocabularyList');
+        vocabularyList.innerHTML = '';
+        vocabulary.forEach(function (word) {
+            let li = document.createElement('li');
+            li.textContent = word;
+            li.addEventListener('click', function () {
+                showDefinition(word);
+            });
+            vocabularyList.appendChild(li);
+        });
+        console.log('Vocabulary list updated'); // 调试信息
+    });
+}
+
+function showWordDefinition(word) {
+    fetch(chrome.runtime.getURL('gptwords.json'))
+        .then(response => response.json())
+        .then(dictionary => {
+            let definition = dictionary[word.toLowerCase()];
+            if (definition) {
+                showToast(`${word}: ${definition}`);
+            } else {
+                showToast(`Definition not found for "${word}"`);
+            }
+        });
+}
+
+function showToast(message) {
+    let snackbarContainer = document.querySelector('#toast');
+    if (snackbarContainer && snackbarContainer.MaterialSnackbar) {
+        let data = { message: message, timeout: 2000 };
+        snackbarContainer.MaterialSnackbar.showSnackbar(data);
+    } else {
+        alert(message);
+    }
+}
+
+function showRandomWord() {
+    fetch(chrome.runtime.getURL('gptwords.json'))
+        .then(response => response.json())
+        .then(data => {
+            const wordList = data.wordList;
+            const randomWordObj = wordList[Math.floor(Math.random() * wordList.length)];
+            const randomWord = randomWordObj.word;
+            const wordContent = parseContent(randomWordObj.content);
+            const randomWordElement = document.getElementById('randomWord');
+            randomWordElement.innerHTML = `
+                    <h3>${randomWord}</h3>
+                    <p><strong>定义：</strong>${wordContent['分析词义']}</p>
+                    <p><strong>例句：</strong>${wordContent['列举例句'][0]}</p>
+                    <p><strong>词根分析</strong>${wordContent['词根分析']}</p>
+                    <p><strong>发展历史和文化背景</strong>${wordContent['发展历史和文化背景']}</p>
+                    <p><strong>单词变形</strong>${wordContent['单词变形']}</p>
+                    <p><strong>记忆辅助：</strong>${wordContent['记忆辅助']}</p>
+                    <p><strong>小故事：</strong>${wordContent['小故事']}</p>
+                `;
+        })
+        .catch(error => {
+            console.error('Error loading gptwords.json:', error);
+        });
+}
+
+function parseContent(content) {
+    const sections = content.split('###').filter(section => section.trim() !== '');
+    const result = {};
+     
+    sections.forEach(section => {
+        const lines = section.trim().split('\n');
+        if (lines.length === 0) return; // 跳过空部分
+
+        const firstLine = lines[0];
+        const titleEndIndex = firstLine.indexOf(' ');
+        const title = titleEndIndex !== -1 ? firstLine.slice(0, titleEndIndex).trim() : firstLine.trim();
+        
+        let sectionContent = '';
+        if (titleEndIndex !== -1) {
+            sectionContent = firstLine.slice(titleEndIndex + 1).trim(); // 保留第一行标题后的内容
+        }
+        if (lines.length > 1) {
+            sectionContent += (sectionContent ? '\n' : '') + lines.slice(1).join('\n');
+        }
+        
+        if (title === '列举例句') {
+            result[title] = sectionContent.split(/\d+\./).slice(1).map(item => item.trim()).filter(Boolean);
+        } else {
+            result[title] = sectionContent.trim();
         }
     });
-};
-switchState(true);
-addEvents();
-initSetLabel();
+    
+    return result;
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    console.log('DOMContentLoaded event fired'); // 调试信息
+    initStorageWhenReady();
+    let showVocabularyButton = document.getElementById('showVocabulary');
+    if (showVocabularyButton) {
+        showVocabularyButton.addEventListener('click', showRandomWord);
+    } else {
+        console.error('Show Vocabulary button not found');
+    }
+    // 初始显示随机单词
+    showRandomWord();
+});
